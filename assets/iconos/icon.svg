@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Mi Cocina: sartén sobre fondo cálido -->
+  <rect width="512" height="512" rx="112" fill="#9a3412"/>
+  <circle cx="232" cy="264" r="120" fill="#fdf9f3"/>
+  <circle cx="232" cy="264" r="92" fill="#f3e3cb"/>
+  <circle cx="232" cy="264" r="46" fill="#fbbf24"/>
+  <circle cx="214" cy="250" r="12" fill="#fdf9f3" opacity=".85"/>
+  <rect x="342" y="248" width="120" height="32" rx="16" fill="#fdf9f3"/>
+  <path d="M170 96c0 18-16 22-16 40" stroke="#fdf9f3" stroke-width="16" stroke-linecap="round" fill="none"/>
+  <path d="M232 84c0 18-16 22-16 40" stroke="#fdf9f3" stroke-width="16" stroke-linecap="round" fill="none"/>
+  <path d="M294 96c0 18-16 22-16 40" stroke="#fdf9f3" stroke-width="16" stroke-linecap="round" fill="none"/>
+</svg>

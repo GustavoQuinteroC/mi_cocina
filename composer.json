@@ -1,0 +1,16 @@
+{
+    "name": "familia/mi-cocina",
+    "description": "Mi Cocina - organizador familiar de platillos, recetas y menú semanal con IA",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "catfan/medoo": "^2.1",
+        "vlucas/phpdotenv": "^5.6",
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

@@ -1,0 +1,18 @@
+# Mi Cocina — protección del document root (Apache).
+# En nginx aplicar reglas equivalentes (ver README, sección Producción).
+
+# Nunca servir archivos ocultos (.env, .git, etc.)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Directorios que jamás deben servirse por web
+RewriteEngine On
+RewriteRule ^(vendor|sql|storage)/ - [F,L]
+
+# Los controladores globales/individuales solo se incluyen desde PHP;
+# el único punto de entrada web en /controladores/ es ajax.php.
+RewriteRule ^controladores/(globales|individuales)/ - [F,L]
+
+# Sin listado de directorios
+Options -Indexes

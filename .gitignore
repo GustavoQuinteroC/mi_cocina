@@ -1,0 +1,13 @@
+# Secretos - nunca al repo
+.env
+
+# Dependencias
+/vendor/
+
+# Datos generados en runtime
+/storage/cache/ia/*.json
+/storage/logs/*.log
+
+# Sistema
+.DS_Store
+Thumbs.db
