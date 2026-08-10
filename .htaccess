@@ -8,6 +8,10 @@
 
 # Directorios que jamás deben servirse por web
 RewriteEngine On
+
+# Favicon: los navegadores piden /favicon.ico; lo mandamos al icono SVG.
+RewriteRule ^favicon\.ico$ /assets/iconos/icon.svg [L]
+
 RewriteRule ^(vendor|sql|storage)/ - [F,L]
 
 # Los controladores globales/individuales solo se incluyen desde PHP;
@@ -16,3 +20,13 @@ RewriteRule ^controladores/(globales|individuales)/ - [F,L]
 
 # Sin listado de directorios
 Options -Indexes
+
+# Página 404 estilizada (rutas .php inexistentes incluidas)
+ErrorDocument 404 /vistas/error404.php
+
+# Cabeceras de seguridad (respaldo; también se envían desde PHP)
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

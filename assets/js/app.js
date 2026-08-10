@@ -25,6 +25,11 @@ async function peticionAjax(accion, datos = {}) {
         },
         body: JSON.stringify({ accion, ...datos }),
     });
+    // Sesión caducada o revocada: en vez de dejar la app "muerta", al login.
+    if (respuesta.status === 401) {
+        window.location.href = '/index.php';
+        throw new Error('Tu sesión expiró. Vuelve a entrar.');
+    }
     const json = await respuesta.json().catch(() => ({}));
     if (!respuesta.ok) {
         const detalle = Array.isArray(json.details) ? ' ' + json.details.join(' ') : '';
@@ -67,6 +72,14 @@ async function sugerirConIA(tono) {
 // Los avisos del servidor también se autodestruyen.
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('#avisos .aviso').forEach(el => setTimeout(() => el.remove(), 4000));
+
+    // Al cerrar sesión, se le pide al service worker que borre su caché para no
+    // dejar páginas privadas accesibles sin conexión en dispositivos compartidos.
+    document.querySelectorAll('form input[name="accion"][value="salir"]').forEach(input => {
+        input.form.addEventListener('submit', () => {
+            navigator.serviceWorker?.controller?.postMessage('limpiar-cache');
+        });
+    });
 });
 
 // ---------- Componentes Alpine ----------
@@ -248,6 +261,9 @@ document.addEventListener('alpine:init', () => {
 
         // ---- Modo cocina ----
         async abrirModoCocina() {
+            if (!this.receta || !this.receta.pasos || !this.receta.pasos.length) {
+                return avisar('Esta receta no tiene pasos de preparación.', 'error');
+            }
             this.pasoActual = 0;
             this.modoCocina = true;
             document.body.style.overflow = 'hidden';

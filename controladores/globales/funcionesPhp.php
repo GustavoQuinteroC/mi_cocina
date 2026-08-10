@@ -23,6 +23,11 @@ if (class_exists(Dotenv\Dotenv::class)) {
     Dotenv\Dotenv::createImmutable($raizProyecto)->safeLoad();
 }
 
+// Zona horaria: por defecto la de Guadalajara/CDMX (la app es para una familia
+// tapatía). Se puede cambiar con APP_TIMEZONE en .env. Sin esto, PHP usa UTC y
+// "hoy"/"ayer", el sello "Hecho hoy" y el resaltado del plan se desfasan ~6 h.
+date_default_timezone_set(leerEnv('APP_TIMEZONE', 'America/Mexico_City') ?: 'America/Mexico_City');
+
 /** Lee una variable de entorno con valor por defecto. */
 function leerEnv(string $clave, ?string $defecto = null): ?string
 {
@@ -100,10 +105,55 @@ function iniciarSesionSegura(): void
 
 iniciarSesionSegura();
 
+// ---------------------------------------------------------------------------
+// Cabeceras de seguridad (defensa en profundidad). Se envían en TODA respuesta
+// porque este archivo se incluye antes de imprimir nada.
+// ---------------------------------------------------------------------------
+
+/** Cabeceras de seguridad básicas (anti-clickjacking, anti-sniffing, referrer). */
+function cabecerasSeguridad(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Frame-Options: DENY');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+}
+
+cabecerasSeguridad();
+
 /** ¿Hay un usuario autenticado con familia? */
 function sesionActiva(): bool
 {
     return isset($_SESSION['idusuario'], $_SESSION['idfamilia']);
+}
+
+/**
+ * Revalida contra la BD que el usuario de la sesión siga existiendo, activo y en
+ * su familia. Refresca también el rol (para que promover/degradar admin surta
+ * efecto sin re-login). Evita que un usuario expulsado o desactivado siga
+ * operando con una sesión vieja. Cacheado por petición.
+ */
+function usuarioSesionValido(): bool
+{
+    static $valido = null;
+    if ($valido !== null) {
+        return $valido;
+    }
+    if (!sesionActiva()) {
+        return $valido = false;
+    }
+    global $database;
+    $usuario = $database->get('usuarios', ['activo', 'id_familia', 'rol'], ['id' => idUsuarioActual()]);
+    $valido = $usuario !== null
+        && (int) $usuario['activo'] === 1
+        && (int) $usuario['id_familia'] === (int) ($_SESSION['idfamilia'] ?? -1);
+    if ($valido) {
+        $_SESSION['rolusuario'] = $usuario['rol']; // mantener el rol fresco
+    }
+    return $valido;
 }
 
 /**
@@ -112,9 +162,11 @@ function sesionActiva(): bool
  */
 function validarSesion(): void
 {
-    if (sesionActiva()) {
+    if (sesionActiva() && usuarioSesionValido()) {
         return;
     }
+    // Sesión inexistente o revocada (usuario expulsado/desactivado): se limpia.
+    unset($_SESSION['idusuario'], $_SESSION['idfamilia'], $_SESSION['nombreusuario'], $_SESSION['rolusuario']);
     if (peticionEsperaJson()) {
         respuestaJson(['error' => 'No autenticado'], 401);
     }
@@ -353,6 +405,68 @@ function registroLog(string $accion, string $mensaje): void
         $mensaje
     );
     @file_put_contents($ruta, $linea, FILE_APPEND | LOCK_EX);
+}
+
+// ---------------------------------------------------------------------------
+// Limitador de tasa simple por archivo (login, registro y acciones de IA).
+// No requiere BD ni extensiones: guarda marcas de tiempo en storage/cache/rate.
+// ---------------------------------------------------------------------------
+
+/** Ruta del archivo de marcas para una clave de tasa. */
+function rutaArchivoTasa(string $clave): string
+{
+    $dir = dirname(__DIR__, 2) . '/storage/cache/rate';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    return $dir . '/' . hash('sha256', $clave) . '.json';
+}
+
+/** Cuántos intentos hay registrados para $clave dentro de la ventana (segundos). */
+function contarIntentos(string $clave, int $ventanaSegundos): int
+{
+    $archivo = rutaArchivoTasa($clave);
+    if (!is_file($archivo)) {
+        return 0;
+    }
+    $ahora = time();
+    $marcas = json_decode((string) @file_get_contents($archivo), true) ?: [];
+    $marcas = array_filter($marcas, fn($t) => ($ahora - (int) $t) < $ventanaSegundos);
+    return count($marcas);
+}
+
+/** Registra un intento para $clave (conservando solo los de la última hora). */
+function registrarIntento(string $clave): void
+{
+    $archivo = rutaArchivoTasa($clave);
+    $ahora = time();
+    $marcas = is_file($archivo) ? (json_decode((string) @file_get_contents($archivo), true) ?: []) : [];
+    $marcas = array_values(array_filter($marcas, fn($t) => ($ahora - (int) $t) < 3600));
+    $marcas[] = $ahora;
+    @file_put_contents($archivo, json_encode($marcas), LOCK_EX);
+}
+
+/**
+ * Permite la acción y registra el intento si no se superó el límite en la ventana.
+ * Devuelve false si ya se alcanzó el tope (no registra en ese caso).
+ */
+function controlarTasa(string $clave, int $limite, int $ventanaSegundos): bool
+{
+    if (contarIntentos($clave, $ventanaSegundos) >= $limite) {
+        return false;
+    }
+    registrarIntento($clave);
+    return true;
+}
+
+/** IP del cliente (considera el proxy de Coolify) para las claves de tasa. */
+function ipCliente(): string
+{
+    $reenviada = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+    if ($reenviada !== '') {
+        return trim(explode(',', $reenviada)[0]);
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? 'desconocida';
 }
 
 // ---------------------------------------------------------------------------

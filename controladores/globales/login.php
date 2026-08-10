@@ -69,9 +69,19 @@ function procesarLogin(): never
         redirigir('/index.php');
     }
 
+    // Anti fuerza bruta: máx. 6 intentos fallidos por IP+correo en 10 minutos.
+    $claveTasa = 'login:' . ipCliente() . ':' . strtolower($correo);
+    if (contarIntentos($claveTasa, 600) >= 6) {
+        flash('error', 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.');
+        conservarFormulario();
+        registroLog('login', 'Bloqueo por exceso de intentos para el correo ' . strtolower($correo));
+        redirigir('/index.php');
+    }
+
     $usuario = usuarioPorCorreo($correo);
     if ($usuario === null || (int) ($usuario['activo'] ?? 1) !== 1
         || !password_verify($password, $usuario['password'])) {
+        registrarIntento($claveTasa);
         flash('error', 'Credenciales incorrectas.');
         conservarFormulario();
         registroLog('login', 'Intento fallido para el correo ' . strtolower($correo));
@@ -94,6 +104,13 @@ function procesarRegistro(): never
     $nombreFamilia = post('nombre_familia');
     $codigoInvitacion = post('codigo_invitacion');
 
+    // Anti-abuso: máx. 10 registros por IP en 1 hora (frena la fuerza bruta de
+    // códigos de invitación creando cuentas en cadena).
+    if (!controlarTasa('registro:' . ipCliente(), 10, 3600)) {
+        flash('error', 'Demasiados registros desde esta red. Inténtalo más tarde.');
+        redirigir('/index.php?pantalla=registro');
+    }
+
     // --- Validación de entrada ---
     $errores = [];
     if (mb_strlen($nombre) < 2 || mb_strlen($nombre) > 120) {
@@ -104,6 +121,10 @@ function procesarRegistro(): never
     }
     if (strlen($password) < 8) {
         $errores[] = 'La contraseña debe tener al menos 8 caracteres.';
+    }
+    // bcrypt (password_hash) trunca en 72 bytes: evitamos truncados silenciosos.
+    if (strlen($password) > 72) {
+        $errores[] = 'La contraseña es demasiado larga (máximo 72 caracteres).';
     }
     if (!in_array($modo, ['crear', 'unirme'], true)) {
         $errores[] = 'Elige crear una familia o unirte a una.';
@@ -132,16 +153,35 @@ function procesarRegistro(): never
         redirigir('/index.php?pantalla=registro');
     }
 
-    // --- Alta ---
-    if ($modo === 'crear') {
-        $idFamilia = crearFamilia($nombreFamilia);
-        $rol = 'admin'; // quien crea la familia la administra
-    } else {
-        $idFamilia = (int) $familia['id'];
-        $rol = 'miembro';
+    // --- Alta atómica: familia + usuario en una transacción. Si el segundo
+    //     insert falla (p. ej. dos registros con el mismo correo a la vez), se
+    //     revierte la familia y no queda basura huérfana. ---
+    global $database;
+    $rol = $modo === 'crear' ? 'admin' : 'miembro'; // quien crea la familia la administra
+    $idFamilia = 0;
+    $usuario = null;
+    try {
+        $database->action(function () use (&$usuario, &$idFamilia, $modo, $familia, $nombreFamilia, $nombre, $correo, $password, $rol) {
+            $idFamilia = $modo === 'crear' ? crearFamilia($nombreFamilia) : (int) $familia['id'];
+            $usuario = crearUsuario($idFamilia, $nombre, $correo, $password, $rol);
+        });
+    } catch (PDOException $excepcion) {
+        // 1062/23000 = choca la unicidad del correo (carrera). Otro error: log + genérico.
+        if (($excepcion->errorInfo[1] ?? 0) === 1062 || (string) $excepcion->getCode() === '23000') {
+            flash('error', 'Ese correo ya está registrado.');
+        } else {
+            error_log('[mi_cocina/registro] ' . $excepcion->getMessage());
+            flash('error', 'No se pudo completar el registro. Inténtalo de nuevo.');
+        }
+        conservarFormulario();
+        redirigir('/index.php?pantalla=registro');
+    }
+    if ($usuario === null) {
+        flash('error', 'No se pudo completar el registro. Inténtalo de nuevo.');
+        conservarFormulario();
+        redirigir('/index.php?pantalla=registro');
     }
 
-    $usuario = crearUsuario($idFamilia, $nombre, $correo, $password, $rol);
     abrirSesionUsuario($usuario);
     limpiarFormulario();
     registroLog('registro', 'Nuevo usuario en familia ' . $idFamilia . ' con rol ' . $rol);

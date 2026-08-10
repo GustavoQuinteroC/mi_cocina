@@ -118,7 +118,10 @@ Tablas Fase 2 (creadas desde ya): `preferencias`, `despensa`, `lista_compras`, `
 
 ## Producción (notas)
 
-- Document root = raíz del proyecto, con PHP-FPM. En **nginx** replicar lo del `.htaccess`:
+- Document root = raíz del proyecto, con PHP-FPM.
+- ⚠️ **CRÍTICO en nginx/Coolify:** el `.htaccess` **solo funciona con Apache**. Si el
+  contenedor sirve con **nginx**, hay que replicar estas reglas o quedan expuestos
+  `.env`, `vendor/`, `sql/`, `storage/` y los controladores internos:
 
 ```nginx
 location ~ /\. { deny all; }
@@ -126,12 +129,29 @@ location ~ ^/(vendor|sql|storage)/ { deny all; }
 location ~ ^/controladores/(globales|individuales)/ { deny all; }
 ```
 
+  **Verificación post-deploy obligatoria:** pedir en el navegador `/.env`,
+  `/sql/migrate.sql` y `/composer.lock` — deben responder **403/404**.
+
 - `APP_ENV=prod` en `.env` (errores a `storage/logs/`, cookie `secure`).
-- `storage/` necesita permisos de escritura para el usuario de PHP (caché de IA y logs).
+- `APP_TIMEZONE` en `.env` (por defecto `America/Mexico_City`): sin esto, "hoy/ayer"
+  y "Hecho hoy" se calculan en UTC y se desfasan.
+- `storage/` necesita permisos de escritura para el usuario de PHP (caché de IA,
+  logs y limitador de tasa en `storage/cache/rate/`).
+- Cabeceras de seguridad (`X-Frame-Options`, `X-Content-Type-Options`,
+  `Referrer-Policy`, `Permissions-Policy`) se envían desde PHP en toda respuesta.
+- Límites de tasa activos: login (6 fallos/10 min por IP+correo), registro
+  (10/hora por IP) y acciones de IA (25/5 min por usuario) — ver `OPENAI_TIMEOUT`.
+
+## Cuenta y familia
+
+- **Preferencias** por usuario (alergias/gustos/dietas) en la sección *Familia*: la
+  IA las respeta al generar y recomendar recetas.
+- **Cambiar mi contraseña** y **salir de la familia** (miembros) desde *Mi cuenta*.
+- El admin puede **restablecer la contraseña** de un miembro (contraseña temporal) y
+  **transferir la administración** a otro miembro.
 
 ## Fase 2 (preparada)
 
-- `preferencias` (alergias/gustos/dietas): **ya se envían a la IA** al generar recetas.
-- `despensa` + `lista_compras`: `lista_compras.php` ya calcula la lista del plan semanal restando la despensa (falta exponer la vista).
-- `etiquetas`/`platillos_etiquetas` y `votos` ("qué se antoja" semanal): esquema listo.
+- `despensa` + `lista_compras`: ya con vista; calcula la lista del plan semanal restando la despensa.
+- `etiquetas`/`platillos_etiquetas` y `votos` ("qué se antoja" semanal): esquema listo, **sin UI todavía**.
 - Pendientes documentados: porciones ajustables en la interfaz, importar receta desde URL, turnos de cocina, estadísticas, colecciones de favoritos y notificaciones.

@@ -168,7 +168,12 @@ function alternarFavorito(int $idPlatillo): bool
         $database->delete('favoritos', $where);
         return false;
     }
-    $database->insert('favoritos', $where);
+    try {
+        $database->insert('favoritos', $where);
+    } catch (PDOException) {
+        // Doble clic simultáneo: choca uq_usuario_platillo; ya es favorito.
+        return true;
+    }
     return true;
 }
 

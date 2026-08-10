@@ -31,6 +31,13 @@ exigirCsrf();
 $peticion = cuerpoJson();
 $accion = (string) ($peticion['accion'] ?? '');
 
+// Rate-limit de las acciones que consumen IA: protege el costo de tokens y evita
+// que unas pocas llamadas concurrentes (timeout largo) agoten los workers.
+$accionesIA = ['ia_receta', 'ia_sugerir', 'ia_ajustar', 'ia_despensa', 'ia_crear_platillo', 'ingrediente_agregar'];
+if (in_array($accion, $accionesIA, true) && !controlarTasa('ia:' . idUsuarioActual(), 25, 300)) {
+    respuestaJson(['error' => 'Estás usando la IA muy seguido. Espera un momento e inténtalo de nuevo.'], 429);
+}
+
 try {
     switch ($accion) {
 
@@ -51,7 +58,8 @@ try {
                 respuestaJson(['error' => 'Platillo no encontrado.'], 404);
             }
             $errores = [];
-            $limpia = validarReceta($peticion, $errores);
+            // Manual: se permite una receta con solo ingredientes o solo pasos.
+            $limpia = validarReceta($peticion, $errores, exigirCompleta: false);
             if ($limpia === null) {
                 respuestaJson(['error' => 'Receta inválida.', 'details' => $errores], 422);
             }
@@ -112,6 +120,7 @@ try {
             $errores = [];
             $limpia = validarReceta($cruda, $errores);
             if ($limpia === null) {
+                descartarCacheIA(); // que el reintento vuelva a consultar al modelo
                 respuestaJson([
                     'error' => 'La IA devolvió una receta inválida y no se guardó. Intenta de nuevo.',
                     'details' => $errores,
@@ -146,6 +155,7 @@ try {
             $errores = [];
             $recetaLimpia = validarReceta($datos['receta'], $errores);
             if ($recetaLimpia === null) {
+                descartarCacheIA(); // que el reintento vuelva a consultar al modelo
                 respuestaJson([
                     'error' => 'La sugerencia de la IA no pasó la validación y no se guardó.',
                     'details' => $errores,
@@ -322,6 +332,7 @@ try {
             $errores = [];
             $limpia = validarReceta($cruda, $errores);
             if ($limpia === null) {
+                descartarCacheIA(); // que el reintento vuelva a consultar al modelo
                 respuestaJson(['error' => 'La IA no devolvió una receta válida. Intenta de nuevo.', 'details' => $errores], 422);
             }
             $idPlatillo = crearPlatillo([

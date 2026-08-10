@@ -143,11 +143,19 @@ function recetaDesdeFormulario(): array
  *
  * @param string[] $errores
  */
-function validarReceta(array $datos, array &$errores): ?array
+function validarReceta(array $datos, array &$errores, bool $exigirCompleta = true): ?array
 {
+    $ingredientes = validarIngredientesReceta($datos['ingredientes'] ?? null, $errores, !$exigirCompleta);
+    $pasos = validarPasosReceta($datos['pasos'] ?? null, $errores, !$exigirCompleta);
+
+    // En modo no estricto (captura manual) basta con ingredientes O pasos.
+    if (!$exigirCompleta && $ingredientes === [] && $pasos === [] && $errores === []) {
+        $errores[] = 'Agrega al menos un ingrediente o un paso.';
+    }
+
     $limpia = [
-        'ingredientes' => validarIngredientesReceta($datos['ingredientes'] ?? null, $errores),
-        'pasos' => validarPasosReceta($datos['pasos'] ?? null, $errores),
+        'ingredientes' => $ingredientes,
+        'pasos' => $pasos,
         'notas' => validarTextoOpcional($datos['notas'] ?? null, 2000, 'notas', $errores),
         'url_fuente' => validarUrlOpcional($datos['url_fuente'] ?? null, $errores),
         'porciones' => validarEnteroOpcional($datos['porciones'] ?? null, 1, 50, 'porciones', $errores),
@@ -158,10 +166,16 @@ function validarReceta(array $datos, array &$errores): ?array
 }
 
 /** @param string[] $errores */
-function validarIngredientesReceta(mixed $ingredientes, array &$errores): array
+function validarIngredientesReceta(mixed $ingredientes, array &$errores, bool $opcional = false): array
 {
-    if (!is_array($ingredientes) || $ingredientes === [] || array_is_list($ingredientes) === false) {
-        $errores[] = 'ingredientes debe ser una lista no vacía.';
+    if ($ingredientes === null || $ingredientes === []) {
+        if (!$opcional) {
+            $errores[] = 'ingredientes debe ser una lista no vacía.';
+        }
+        return [];
+    }
+    if (!is_array($ingredientes) || array_is_list($ingredientes) === false) {
+        $errores[] = 'ingredientes debe ser una lista.';
         return [];
     }
     if (count($ingredientes) > 60) {
@@ -209,10 +223,16 @@ function validarIngredientesReceta(mixed $ingredientes, array &$errores): array
 }
 
 /** @param string[] $errores */
-function validarPasosReceta(mixed $pasos, array &$errores): array
+function validarPasosReceta(mixed $pasos, array &$errores, bool $opcional = false): array
 {
-    if (!is_array($pasos) || $pasos === [] || array_is_list($pasos) === false) {
-        $errores[] = 'pasos debe ser una lista ordenada no vacía.';
+    if ($pasos === null || $pasos === []) {
+        if (!$opcional) {
+            $errores[] = 'pasos debe ser una lista ordenada no vacía.';
+        }
+        return [];
+    }
+    if (!is_array($pasos) || array_is_list($pasos) === false) {
+        $errores[] = 'pasos debe ser una lista ordenada.';
         return [];
     }
     if (count($pasos) > 40) {

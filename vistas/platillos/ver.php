@@ -171,7 +171,7 @@ include __DIR__ . '/_datalist_ingredientes.php';
                 <div class="lg:col-span-2 bg-white dark:bg-stone-900 rounded-3xl border border-crema-200 dark:border-stone-800 p-6">
                     <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
                         <h2 class="font-display font-bold text-xl">👩‍🍳 Preparación</h2>
-                        <button @click="abrirModoCocina()"
+                        <button @click="abrirModoCocina()" x-show="receta.pasos && receta.pasos.length"
                                 class="px-4 py-2 rounded-2xl bg-barro-500 hover:bg-barro-600 text-white font-bold text-sm shadow-lg shadow-barro-500/25 transition-all active:scale-95">
                             🔥 Modo cocina
                         </button>

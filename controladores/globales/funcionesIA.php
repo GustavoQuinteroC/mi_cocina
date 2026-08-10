@@ -59,6 +59,7 @@ function sugerirPlatilloIA(string $tono, ?string $tipoComida, array $preferencia
 
     $datos = llamarIAJson($prompt, cacheable: true);
     if (!isset($datos['platillo'], $datos['receta']) || !is_array($datos['platillo']) || !is_array($datos['receta'])) {
+        descartarCacheIA(); // respuesta malformada: no la reutilices en el reintento
         throw new RuntimeException('La IA no devolvió el formato esperado (platillo + receta).');
     }
     return $datos;
@@ -210,6 +211,10 @@ function llamarIAJson(string $prompt, bool $cacheable): array
     $llaveCache = hash('sha256', $modelo . '|' . (int) $conBusqueda . '|' . $prompt);
     $archivoCache = $directorioCache . '/' . $llaveCache . '.json';
 
+    // Se recuerda la última llave para poder descartarla si la receta resulta
+    // inválida más adelante (ver descartarCacheIA), y no dejar "atascado" un platillo.
+    $GLOBALS['_ultima_llave_cache_ia'] = $cacheable ? $llaveCache : '';
+
     if ($cacheable && is_file($archivoCache)) {
         $cacheado = json_decode((string) file_get_contents($archivoCache), true);
         if (is_array($cacheado)) {
@@ -230,21 +235,46 @@ function llamarIAJson(string $prompt, bool $cacheable): array
 
     $datos = extraerJsonIA($texto);
 
-    if ($cacheable) {
+    // NO se cachean respuestas de error (p. ej. {"error":"desconocido"}): si no,
+    // un platillo real que falló una vez quedaría atascado devolviendo el error
+    // para siempre y "Intenta de nuevo" nunca funcionaría.
+    if ($cacheable && !isset($datos['error'])) {
         @mkdir($directorioCache, 0775, true);
         @file_put_contents($archivoCache, json_encode($datos, JSON_UNESCAPED_UNICODE));
     }
     return $datos;
 }
 
+/**
+ * Borra de la caché la última respuesta de IA. Se llama cuando una receta de IA
+ * ya cacheada NO pasa validarReceta(), para que el siguiente intento vuelva a
+ * consultar al modelo en lugar de releer una respuesta inválida.
+ */
+function descartarCacheIA(): void
+{
+    $llave = $GLOBALS['_ultima_llave_cache_ia'] ?? '';
+    if ($llave === '') {
+        return;
+    }
+    $archivo = dirname(__DIR__, 2) . '/storage/cache/ia/' . $llave . '.json';
+    if (is_file($archivo)) {
+        @unlink($archivo);
+    }
+    $GLOBALS['_ultima_llave_cache_ia'] = '';
+}
+
 /** Responses API con web_search (grounding en fuentes reales). */
 function llamarResponsesApi(string $modelo, string $sistema, string $prompt): string
 {
+    // El nombre de la herramienta cambió entre versiones de la API
+    // (web_search / web_search_preview). Configurable para no tocar código si
+    // OpenAI lo renombra o el modelo requiere una variante.
+    $herramienta = leerEnv('OPENAI_WEB_SEARCH_TOOL', 'web_search') ?: 'web_search';
     $respuesta = peticionOpenAI('https://api.openai.com/v1/responses', [
         'model' => $modelo,
         'instructions' => $sistema,
         'input' => $prompt,
-        'tools' => [['type' => 'web_search']],
+        'tools' => [['type' => $herramienta]],
     ]);
 
     // La Responses API expone el texto final en output[] -> content[] -> text.
@@ -291,9 +321,12 @@ function peticionOpenAI(string $url, array $carga): array
 {
     $apiKey = leerEnv('OPENAI_API_KEY');
     $cuerpo = json_encode($carga, JSON_UNESCAPED_UNICODE);
+    // Timeout acotado: 90 s bloqueaba un worker PHP-FPM demasiado tiempo y unas
+    // pocas llamadas concurrentes podían agotar los workers. Configurable.
+    $timeout = max(10, min(60, (int) leerEnv('OPENAI_TIMEOUT', '45')));
 
     if (class_exists(GuzzleHttp\Client::class)) {
-        $cliente = new GuzzleHttp\Client(['timeout' => 90]);
+        $cliente = new GuzzleHttp\Client(['timeout' => $timeout]);
         try {
             $res = $cliente->post($url, [
                 'headers' => [
@@ -312,7 +345,7 @@ function peticionOpenAI(string $url, array $carga): array
             'method' => 'POST',
             'header' => "Authorization: Bearer $apiKey\r\nContent-Type: application/json\r\n",
             'content' => $cuerpo,
-            'timeout' => 90,
+            'timeout' => $timeout,
             'ignore_errors' => true,
         ]]);
         $crudo = file_get_contents($url, false, $contexto);

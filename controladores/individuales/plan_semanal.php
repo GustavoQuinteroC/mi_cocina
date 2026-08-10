@@ -76,7 +76,9 @@ function asignarCeldaPlan(string $fecha, string $tipoComida, ?int $idPlatillo): 
 
     if ($database->has('plan_semanal', $where)) {
         $database->update('plan_semanal', ['id_platillo' => $idPlatillo, 'id_creado_por' => idUsuarioActual()], $where);
-    } else {
+        return;
+    }
+    try {
         $database->insert('plan_semanal', [
             'id_familia' => idFamiliaActual(),
             'fecha_plan' => $fecha,
@@ -84,5 +86,9 @@ function asignarCeldaPlan(string $fecha, string $tipoComida, ?int $idPlatillo): 
             'id_platillo' => $idPlatillo,
             'id_creado_por' => idUsuarioActual(),
         ]);
+    } catch (PDOException) {
+        // Dos miembros editaron la misma celda a la vez: choca
+        // uq_familia_fecha_comida; se convierte en actualización.
+        $database->update('plan_semanal', ['id_platillo' => $idPlatillo, 'id_creado_por' => idUsuarioActual()], $where);
     }
 }

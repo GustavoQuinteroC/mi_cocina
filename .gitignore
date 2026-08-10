@@ -1,11 +1,13 @@
 # Secretos - nunca al repo
 .env
+CLAUDE.md
 
 # Dependencias
 /vendor/
 
 # Datos generados en runtime
 /storage/cache/ia/*.json
+/storage/cache/rate/*.json
 /storage/logs/*.log
 
 # Sistema

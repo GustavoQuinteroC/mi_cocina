@@ -40,7 +40,8 @@ if ($enviado) {
     $tieneReceta = $recetaCruda['ingredientes'] !== [] || $recetaCruda['pasos'] !== [];
     $recetaLimpia = null;
     if ($tieneReceta) {
-        $recetaLimpia = validarReceta($recetaCruda, $errores);
+        // Captura manual: se permite receta con solo ingredientes o solo pasos.
+        $recetaLimpia = validarReceta($recetaCruda, $errores, exigirCompleta: false);
     }
 
     if ($errores === []) {

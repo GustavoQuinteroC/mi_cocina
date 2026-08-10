@@ -7,12 +7,23 @@ declare(strict_types=1);
  * y el cierre de ciclo del inicio.
  */
 
-/** Registra que el platillo se cocinó ahora. */
+/** Registra que el platillo se cocinó ahora (una sola vez por día y familia). */
 function marcarCocinado(int $idPlatillo): void
 {
     global $database;
     $platillo = $database->get('platillos', ['id', 'id_familia'], ['id' => $idPlatillo]);
     verificarFamiliaDeFila($platillo ?: null);
+
+    // Anti-duplicado: si ya se registró hoy, no se vuelve a insertar (evita
+    // inflar veces_cocinado con doble clic o varias pestañas).
+    $hoy = date('Y-m-d');
+    $yaHoy = $database->has('historial_cocina', filtroFamilia([
+        'id_platillo' => $idPlatillo,
+        'fecha_cocinado[<>]' => [$hoy . ' 00:00:00', $hoy . ' 23:59:59'],
+    ]));
+    if ($yaHoy) {
+        return;
+    }
 
     $database->insert('historial_cocina', [
         'id_familia' => idFamiliaActual(),

@@ -140,7 +140,7 @@ $pantalla = get('pantalla') === 'registro' ? 'registro' : 'login';
 
             <div>
                 <label class="block text-sm font-bold mb-1" for="password">Contraseña <span class="font-normal text-stone-400">(mínimo 8)</span></label>
-                <input id="password" name="password" type="password" required minlength="8"
+                <input id="password" name="password" type="password" required minlength="8" maxlength="72"
                        class="w-full px-4 py-3 rounded-2xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-barro-400"
                        autocomplete="new-password">
             </div>
