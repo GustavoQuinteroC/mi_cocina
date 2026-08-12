@@ -183,7 +183,7 @@ $pantalla = get('pantalla') === 'registro' ? 'registro' : 'login';
     <?php endif; ?>
 
     <p class="text-center text-xs text-stone-400 dark:text-stone-600 mt-6">
-        Powered by <span class="font-semibold text-barro-600 dark:text-barro-400">Alkes</span>
+        Powered by <a href="https://alkes.dev" target="_blank" rel="noopener noreferrer" class="font-semibold text-barro-600 dark:text-barro-400 hover:underline">Alkes</a>
     </p>
 </div>
 

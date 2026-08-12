@@ -613,7 +613,7 @@ function pieHtml(): void
 {
     ?>
     <footer class="mt-10 pt-6 border-t border-crema-200 dark:border-stone-800 text-center text-xs text-stone-400 dark:text-stone-600">
-        Powered by <span class="font-semibold text-barro-600 dark:text-barro-400">Alkes</span>
+        Powered by <a href="https://alkes.dev" target="_blank" rel="noopener noreferrer" class="font-semibold text-barro-600 dark:text-barro-400 hover:underline">Alkes</a>
     </footer>
 </main>
 </body>
