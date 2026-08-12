@@ -61,7 +61,8 @@ self.addEventListener('fetch', (evento) => {
                         return new Response(
                             '<!DOCTYPE html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
                             '<body style="font-family:sans-serif;display:grid;place-items:center;min-height:100vh;background:#fdf9f3;color:#57534e;text-align:center">' +
-                            '<div><div style="font-size:3rem">🍳</div><h1>Sin conexión</h1><p>Mi Cocina necesita internet para esta página.</p></div></body></html>',
+                            '<div><div style="font-size:3rem">🍳</div><h1>Sin conexión</h1><p>Mi Cocina necesita internet para esta página.</p>' +
+                            '<p style="font-size:.75rem;color:#a8a29e;margin-top:1.5rem">Powered by <b style="color:#a94a26">Alkes</b></p></div></body></html>',
                             { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
                         );
                     }

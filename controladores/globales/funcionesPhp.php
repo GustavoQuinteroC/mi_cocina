@@ -611,5 +611,12 @@ function mensajesFlash(): void
 /** Cierra el layout. */
 function pieHtml(): void
 {
-    echo "</main>\n</body>\n</html>";
+    ?>
+    <footer class="mt-10 pt-6 border-t border-crema-200 dark:border-stone-800 text-center text-xs text-stone-400 dark:text-stone-600">
+        Powered by <span class="font-semibold text-barro-600 dark:text-barro-400">Alkes</span>
+    </footer>
+</main>
+</body>
+</html>
+<?php
 }

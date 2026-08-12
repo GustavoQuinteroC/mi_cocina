@@ -181,6 +181,10 @@ $pantalla = get('pantalla') === 'registro' ? 'registro' : 'login';
         </p>
     </div>
     <?php endif; ?>
+
+    <p class="text-center text-xs text-stone-400 dark:text-stone-600 mt-6">
+        Powered by <span class="font-semibold text-barro-600 dark:text-barro-400">Alkes</span>
+    </p>
 </div>
 
 </body>
