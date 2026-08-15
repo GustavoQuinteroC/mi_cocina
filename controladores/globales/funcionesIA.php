@@ -55,7 +55,7 @@ function sugerirPlatilloIA(string $tono, ?string $tipoComida, array $preferencia
         . bloquePreferenciasIA($preferencias)
         . "Responde SOLO JSON con este shape exacto:\n"
         . '{"platillo":{"nombre":"...","descripcion":"...","tono":"' . $tono . '","tipo_comida":"desayuno|comida|cena|snack","cocina":"...","dificultad":1,"tiempo_preparacion":30,"porciones":' . $porciones . '},'
-        . '"receta":' . shapeRecetaIA() . '}';
+        . '"receta":' . shapeRecetaIA() . '}' . "\n" . reglaCantidadesIA();
 
     $datos = llamarIAJson($prompt, cacheable: true);
     if (!isset($datos['platillo'], $datos['receta']) || !is_array($datos['platillo']) || !is_array($datos['receta'])) {
@@ -138,6 +138,80 @@ function recomendarPorDespensaIA(array $ingredientesEnCasa, array $preferencias,
     return $datos['recomendaciones'];
 }
 
+/**
+ * Antojo libre: el usuario pide con sus propias palabras ("dame la receta de
+ * birria", "se me antojan camarones cremosos", "quiero algo italiano con lo
+ * que tengo") y la IA decide entre DOS respuestas:
+ *
+ *  - {tipo:"receta", platillo:{...}, receta:{...}}   → pidió un platillo
+ *    concreto: se devuelve su versión MÁS tradicional y popular.
+ *  - {tipo:"recomendaciones", recomendaciones:[...]} → petición abierta:
+ *    entre 3 y 6 platillos reales que encajen con lo pedido.
+ *
+ * La despensa se pasa como contexto y solo se usa si la petición la menciona.
+ */
+function pedirAntojoIA(string $peticion, array $ingredientesEnCasa, array $preferencias, int $porciones): array
+{
+    $despensa = $ingredientesEnCasa === [] ? '(vacía)'
+        : implode(', ', array_slice($ingredientesEnCasa, 0, 120));
+
+    $prompt = "Un usuario te pide algo de cocina con sus propias palabras:\n\"$peticion\"\n\n"
+        . "Contexto:\n"
+        . "- En su despensa tienen: $despensa. SOLO usa esta lista si la petición se refiere a "
+        . "\"lo que tengo\", \"lo que hay en casa\" o pide aprovechar sus ingredientes; si no, ignórala.\n"
+        . "- Toda receta debe rendir EXACTAMENTE $porciones porciones (ajusta las cantidades).\n"
+        . bloquePreferenciasIA($preferencias) . "\n\n"
+        . "Decide UNA de estas respuestas:\n"
+        . "1) Si pide un platillo CONCRETO y reconocible (ej. \"birria\", \"dame la receta de caldo de res\"): "
+        . "responde con la versión MÁS tradicional, popular y ampliamente documentada de ese platillo.\n"
+        . '   JSON: {"tipo":"receta","platillo":{"nombre":"...","descripcion":"breve","tono":"dulce|salado|agridulce|picante|otro","tipo_comida":"desayuno|comida|cena|snack","cocina":"...","dificultad":1},"receta":' . shapeRecetaIA() . "}\n"
+        . "2) Si la petición es ABIERTA (un antojo, un tipo de cocina, ingredientes, \"algo cremoso con camarones\"): "
+        . "recomienda entre 3 y 6 platillos REALES y conocidos que encajen con lo pedido, "
+        . "explicando en la descripción por qué encajan.\n"
+        . '   JSON: {"tipo":"recomendaciones","recomendaciones":[{"nombre":"...","descripcion":"breve","tono":"dulce|salado|agridulce|picante|otro","tipo_comida":"desayuno|comida|cena|snack","faltantes":["solo si usaste la despensa: qué falta"]}]}' . "\n"
+        . '3) Si la petición NO tiene que ver con cocina o comida, responde exactamente {"error":"fuera_de_tema"}.' . "\n\n"
+        . 'IMPORTANTE: tu respuesta COMPLETA debe ser UN solo objeto JSON válido, sin texto antes ni después, '
+        . 'sin markdown y sin comas colgantes. No expliques nada fuera del JSON. ' . reglaCantidadesIA();
+
+    $datos = llamarIAJson($prompt, cacheable: true);
+
+    if (($datos['error'] ?? '') === 'fuera_de_tema') {
+        throw new RuntimeException('Eso no parece un antojo de cocina. Pídeme un platillo o describe qué se te antoja.');
+    }
+    $tipo = $datos['tipo'] ?? '';
+    $formaValida = ($tipo === 'receta' && isset($datos['platillo'], $datos['receta']) && is_array($datos['platillo']) && is_array($datos['receta']))
+        || ($tipo === 'recomendaciones' && isset($datos['recomendaciones']) && is_array($datos['recomendaciones']) && $datos['recomendaciones'] !== []);
+    if (!$formaValida) {
+        descartarCacheIA(); // respuesta malformada: no la reutilices en el reintento
+        throw new RuntimeException('La IA no devolvió el formato esperado. Intenta de nuevo.');
+    }
+    return $datos;
+}
+
+/**
+ * Transcribe un audio de dictado (micrófono) a texto en español con la API
+ * de OpenAI. El modelo se configura con OPENAI_MODEL_TRANSCRIPCION
+ * (por defecto gpt-4o-mini-transcribe; también sirve whisper-1).
+ */
+function transcribirAudioIA(string $rutaArchivo, string $nombreArchivo, string $mime): string
+{
+    $modelo = leerEnv('OPENAI_MODEL_TRANSCRIPCION', 'gpt-4o-mini-transcribe') ?: 'gpt-4o-mini-transcribe';
+
+    $respuesta = peticionOpenAIMultipart('https://api.openai.com/v1/audio/transcriptions', [
+        'model' => $modelo,
+        'language' => 'es',
+        // Pista de contexto: mejora el reconocimiento de platillos e ingredientes.
+        'prompt' => 'Dictado de cocina en español de México: antojos, platillos e ingredientes '
+            . '(birria, pozole, camarones, jitomate, cilantro).',
+    ], $rutaArchivo, $nombreArchivo, $mime);
+
+    $texto = trim((string) ($respuesta['text'] ?? ''));
+    if ($texto === '') {
+        throw new RuntimeException('No se entendió el audio. Intenta dictar de nuevo.');
+    }
+    return $texto;
+}
+
 // ---------------------------------------------------------------------------
 // Internos
 // ---------------------------------------------------------------------------
@@ -145,7 +219,8 @@ function recomendarPorDespensaIA(array $ingredientesEnCasa, array $preferencias,
 /** Pide una receta con el shape de `recetas` y devuelve el arreglo crudo. */
 function pedirRecetaJsonIA(string $prompt, bool $cacheable = true): array
 {
-    $prompt .= "\nResponde SOLO JSON con este shape exacto (sin markdown, sin texto extra):\n" . shapeRecetaIA();
+    $prompt .= "\nResponde SOLO JSON con este shape exacto (sin markdown, sin texto extra):\n" . shapeRecetaIA()
+        . "\n" . reglaCantidadesIA();
 
     $datos = llamarIAJson($prompt, $cacheable);
     if (isset($datos['error'])) {
@@ -159,6 +234,16 @@ function shapeRecetaIA(): string
     return '{"ingredientes":[{"nombre":"string","cantidad":1.5,"unidad":"g|ml|tza|cda|cdta|pza|..."}],'
         . '"pasos":["Paso 1...","Paso 2..."],"porciones":4,"tiempo_preparacion":30,'
         . '"notas":"string opcional o null","url_fuente":"URL de la fuente real o null"}';
+}
+
+/**
+ * Regla anti-JSON-roto: los modelos tienden a escribir "cantidad":al gusto
+ * (sin comillas), lo que invalida TODO el JSON. Se anexa a los prompts de receta.
+ */
+function reglaCantidadesIA(): string
+{
+    return 'REGLA ESTRICTA: en los ingredientes, "cantidad" SIEMPRE es un número mayor a 0, jamás texto '
+        . '(nada de "al gusto" como cantidad). Para un ingrediente al gusto usa cantidad 1 y unidad "al gusto".';
 }
 
 function bloqueContextoIA(array $contexto): string
@@ -233,7 +318,22 @@ function llamarIAJson(string $prompt, bool $cacheable): array
         ? llamarResponsesApi($modelo, $sistema, $prompt)
         : llamarChatCompletions($modelo, $sistema, $prompt);
 
-    $datos = extraerJsonIA($texto);
+    try {
+        $datos = extraerJsonIA($texto);
+    } catch (RuntimeException) {
+        // El modelo a veces contesta con prosa o JSON roto: se registra la
+        // respuesta cruda para diagnóstico y se reintenta UNA vez.
+        registroLog('ia_error', 'Respuesta no-JSON del modelo (reintentando): ' . mb_substr($texto, 0, 600));
+        $texto = $conBusqueda
+            ? llamarResponsesApi($modelo, $sistema, $prompt)
+            : llamarChatCompletions($modelo, $sistema, $prompt);
+        try {
+            $datos = extraerJsonIA($texto);
+        } catch (RuntimeException $excepcion) {
+            registroLog('ia_error', 'Respuesta no-JSON también en el reintento: ' . mb_substr($texto, 0, 600));
+            throw $excepcion;
+        }
+    }
 
     // NO se cachean respuestas de error (p. ej. {"error":"desconocido"}): si no,
     // un platillo real que falló una vez quedaría atascado devolviendo el error
@@ -370,6 +470,75 @@ function peticionOpenAI(string $url, array $carga): array
     return $decodificado;
 }
 
+/**
+ * POST multipart autenticado a OpenAI (subida de audio para transcripción).
+ * Usa Guzzle si está instalado; si no, arma el multipart con streams nativos.
+ */
+function peticionOpenAIMultipart(string $url, array $campos, string $rutaArchivo, string $nombreArchivo, string $mime): array
+{
+    $apiKey = leerEnv('OPENAI_API_KEY');
+    $timeout = max(10, min(60, (int) leerEnv('OPENAI_TIMEOUT', '45')));
+
+    if (class_exists(GuzzleHttp\Client::class)) {
+        $partes = [];
+        foreach ($campos as $nombre => $valor) {
+            $partes[] = ['name' => $nombre, 'contents' => (string) $valor];
+        }
+        $partes[] = [
+            'name' => 'file',
+            'contents' => fopen($rutaArchivo, 'rb'),
+            'filename' => $nombreArchivo,
+            'headers' => ['Content-Type' => $mime],
+        ];
+        $cliente = new GuzzleHttp\Client(['timeout' => $timeout]);
+        try {
+            $res = $cliente->post($url, [
+                'headers' => ['Authorization' => 'Bearer ' . $apiKey],
+                'multipart' => $partes,
+            ]);
+            $crudo = (string) $res->getBody();
+        } catch (GuzzleHttp\Exception\RequestException $excepcion) {
+            $detalle = $excepcion->hasResponse() ? (string) $excepcion->getResponse()->getBody() : $excepcion->getMessage();
+            throw new RuntimeException('Error de OpenAI: ' . mensajeErrorOpenAI($detalle));
+        }
+    } else {
+        $frontera = '----MiCocina' . bin2hex(random_bytes(12));
+        $cuerpo = '';
+        foreach ($campos as $nombre => $valor) {
+            $cuerpo .= "--$frontera\r\nContent-Disposition: form-data; name=\"$nombre\"\r\n\r\n$valor\r\n";
+        }
+        $cuerpo .= "--$frontera\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$nombreArchivo\"\r\n"
+            . "Content-Type: $mime\r\n\r\n" . (string) file_get_contents($rutaArchivo) . "\r\n--$frontera--\r\n";
+
+        $contexto = stream_context_create(['http' => [
+            'method' => 'POST',
+            'header' => "Authorization: Bearer $apiKey\r\nContent-Type: multipart/form-data; boundary=$frontera\r\n",
+            'content' => $cuerpo,
+            'timeout' => $timeout,
+            'ignore_errors' => true,
+        ]]);
+        $crudo = file_get_contents($url, false, $contexto);
+        if ($crudo === false) {
+            throw new RuntimeException('No se pudo contactar a OpenAI.');
+        }
+        $estado = 0;
+        foreach ($http_response_header ?? [] as $cabecera) {
+            if (preg_match('#^HTTP/\S+\s+(\d{3})#', $cabecera, $m)) {
+                $estado = (int) $m[1];
+            }
+        }
+        if ($estado >= 400) {
+            throw new RuntimeException('Error de OpenAI: ' . mensajeErrorOpenAI($crudo));
+        }
+    }
+
+    $decodificado = json_decode($crudo, true);
+    if (!is_array($decodificado)) {
+        throw new RuntimeException('Respuesta de OpenAI no es JSON válido.');
+    }
+    return $decodificado;
+}
+
 function mensajeErrorOpenAI(string $cuerpoCrudo): string
 {
     $decodificado = json_decode($cuerpoCrudo, true);
@@ -392,8 +561,8 @@ function extraerJsonIA(string $texto): array
     $texto = trim($texto);
 
     // Intento directo: normalmente ya es JSON puro.
-    $datos = json_decode($texto, true);
-    if (is_array($datos)) {
+    $datos = decodificarJsonTolerante($texto);
+    if ($datos !== null) {
         return $datos;
     }
 
@@ -424,8 +593,8 @@ function extraerJsonIA(string $texto): array
                 $nivel--;
                 if ($nivel === 0) {
                     $fragmento = substr($texto, $inicio, $i - $inicio + 1);
-                    $datos = json_decode($fragmento, true);
-                    if (is_array($datos)) {
+                    $datos = decodificarJsonTolerante($fragmento);
+                    if ($datos !== null) {
                         return $datos;
                     }
                     break;
@@ -435,4 +604,30 @@ function extraerJsonIA(string $texto): array
     }
 
     throw new RuntimeException('La IA no devolvió un JSON válido. Intenta de nuevo.');
+}
+
+/**
+ * Decodifica JSON aceptando defectos comunes de los modelos: si el intento
+ * estricto falla, repara y reintenta. Repara:
+ *  - comas colgantes antes de } o ]
+ *  - valores de texto sin comillas tras una clave ("cantidad":al gusto),
+ *    el vicio que rompía las recetas con ingredientes "al gusto".
+ * Devuelve null si aun así no se pudo decodificar.
+ */
+function decodificarJsonTolerante(string $texto): ?array
+{
+    $datos = json_decode($texto, true);
+    if (is_array($datos)) {
+        return $datos;
+    }
+
+    $reparado = preg_replace('/,\s*([}\]])/', '$1', $texto);
+    $reparado = preg_replace_callback(
+        '/([{,]\s*"\w+"\s*:\s*)(?!true\b|false\b|null\b)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ][^",}\]]*)/u',
+        static fn(array $m): string => $m[1] . '"' . trim($m[2]) . '"',
+        $reparado
+    );
+
+    $datos = json_decode($reparado, true);
+    return is_array($datos) ? $datos : null;
 }

@@ -48,6 +48,34 @@ mensajesFlash();
 </header>
 
 <div x-data="recomendadorDespensa(<?= $iaActiva ?>)">
+    <!-- Antojo libre: pídele a la IA con tus propias palabras -->
+    <form @submit.prevent="pedirAntojo()" class="mb-4">
+        <div class="flex flex-col sm:flex-row gap-2">
+            <label class="sr-only" for="antojo-ia">Pídele a la IA</label>
+            <input id="antojo-ia" type="text" x-model="antojo" maxlength="400" :disabled="cargandoAntojo"
+                   :class="grabando ? 'ring-2 ring-red-400 border-red-300' : ''"
+                   :placeholder="grabando ? '🔴 Escuchando… habla y el texto irá apareciendo' : 'Pídeme lo que sea: &quot;dame la receta de birria&quot; o &quot;se me antojan camarones cremosos&quot;…'"
+                   class="flex-1 px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-crema-200 dark:border-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-barro-400 disabled:opacity-60 placeholder:text-stone-400 transition-shadow">
+
+            <!-- Dictado por micrófono (transcrito con IA) -->
+            <button type="button" x-show="soportaMic" @click="alternarDictado()" :disabled="transcribiendo || cargandoAntojo"
+                    :class="grabando ? 'bg-red-600 hover:bg-red-700 shadow-red-600/30' : 'bg-oliva-600 hover:bg-oliva-500 shadow-oliva-600/30'"
+                    class="px-4 py-3 rounded-2xl font-bold text-sm text-white shadow-lg disabled:opacity-50 transition-all active:scale-95 shrink-0"
+                    :title="grabando ? 'Detener dictado' : 'Dictar con el micrófono'">
+                <span x-show="!grabando && !transcribiendo">🎤 Dictar</span>
+                <span x-show="grabando" x-cloak class="inline-flex items-center gap-1.5"><span class="animate-pulse">⏺</span> <span x-text="segundosDictado + ' s'"></span> · Listo</span>
+                <span x-show="transcribiendo" x-cloak class="inline-flex items-center gap-2"><span class="animate-spin inline-block">🎧</span> Transcribiendo…</span>
+            </button>
+
+            <button type="submit" :disabled="cargandoAntojo || grabando || transcribiendo"
+                    class="px-5 py-3 rounded-2xl font-bold text-sm bg-barro-500 text-white hover:bg-barro-600 shadow-lg shadow-barro-500/30 disabled:opacity-50 transition-all active:scale-95 shrink-0">
+                <span x-show="!cargandoAntojo">🪄 Pedir a la IA</span>
+                <span x-show="cargandoAntojo" x-cloak class="inline-flex items-center gap-2"><span class="animate-spin inline-block">🍲</span> Buscando…</span>
+            </button>
+        </div>
+        <p class="text-xs text-stone-400 mt-1.5">Escríbelo o díctalo con el 🎤: pide un platillo concreto y te doy su receta más tradicional, o cuéntame tu antojo y te recomiendo qué cocinar.</p>
+    </form>
+
     <!-- Filtro por tono del día + botones de IA -->
     <div class="flex flex-wrap gap-2 mb-4">
         <a href="/vistas/inicio/index.php" class="px-4 py-2.5 rounded-2xl font-bold text-sm transition-all <?= $tono === null
@@ -77,9 +105,9 @@ mensajesFlash();
         </button>
     </div>
 
-    <!-- Recomendaciones de la IA a partir de la despensa -->
+    <!-- Recomendaciones de la IA (por despensa o por antojo libre) -->
     <section x-show="recomendaciones.length > 0" x-cloak class="mb-8">
-        <h2 class="font-display font-bold text-xl mb-3">Con lo que tienes en casa puedes hacer:</h2>
+        <h2 class="font-display font-bold text-xl mb-3" x-text="tituloReco"></h2>
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <template x-for="(reco, idx) in recomendaciones" :key="idx">
                 <div class="bg-white dark:bg-stone-900 rounded-3xl border border-crema-200 dark:border-stone-800 p-5 flex flex-col">
@@ -88,7 +116,7 @@ mensajesFlash();
                     <template x-if="reco.faltantes && reco.faltantes.length">
                         <p class="text-xs mt-2 text-amber-700 dark:text-amber-400 font-semibold">Te falta: <span x-text="reco.faltantes.join(', ')"></span></p>
                     </template>
-                    <template x-if="!reco.faltantes || !reco.faltantes.length">
+                    <template x-if="recoConDespensa && (!reco.faltantes || !reco.faltantes.length)">
                         <p class="text-xs mt-2 text-oliva-600 dark:text-oliva-500 font-semibold">✓ Tienes todo</p>
                     </template>
                     <button @click="crearPlatillo(reco)" :disabled="reco._creando"

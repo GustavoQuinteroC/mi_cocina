@@ -8,7 +8,8 @@ declare(strict_types=1);
  * Toda petición exige sesión activa y token CSRF (cabecera X-CSRF-Token).
  *
  * Acciones: favorito, hecho, guardar_receta, verificar_receta,
- *           plan_celda, ia_receta, ia_sugerir, ia_ajustar.
+ *           plan_celda, ia_receta, ia_sugerir, ia_ajustar, ia_despensa,
+ *           ia_crear_platillo, ia_antojo, ia_transcribir.
  */
 
 require_once __DIR__ . '/globales/funcionesPhp.php';
@@ -28,14 +29,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 exigirCsrf();
 
-$peticion = cuerpoJson();
+// El dictado por micrófono llega como multipart/form-data (trae el audio en
+// $_FILES); todas las demás acciones llegan como cuerpo JSON.
+$esMultipart = str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data');
+$peticion = $esMultipart ? $_POST : cuerpoJson();
 $accion = (string) ($peticion['accion'] ?? '');
 
 // Rate-limit de las acciones que consumen IA: protege el costo de tokens y evita
 // que unas pocas llamadas concurrentes (timeout largo) agoten los workers.
-$accionesIA = ['ia_receta', 'ia_sugerir', 'ia_ajustar', 'ia_despensa', 'ia_crear_platillo', 'ingrediente_agregar'];
+$accionesIA = ['ia_receta', 'ia_sugerir', 'ia_ajustar', 'ia_despensa', 'ia_crear_platillo', 'ia_antojo', 'ingrediente_agregar'];
 if (in_array($accion, $accionesIA, true) && !controlarTasa('ia:' . idUsuarioActual(), 25, 300)) {
     respuestaJson(['error' => 'Estás usando la IA muy seguido. Espera un momento e inténtalo de nuevo.'], 429);
+}
+// La transcripción del dictado tiene su propia cuota, más holgada: mientras se
+// dicta llegan transcripciones parciales cada pocos segundos.
+if ($accion === 'ia_transcribir' && !controlarTasa('ia_voz:' . idUsuarioActual(), 40, 300)) {
+    respuestaJson(['error' => 'Estás dictando muy seguido. Espera un momento e inténtalo de nuevo.'], 429);
 }
 
 try {
@@ -350,6 +359,78 @@ try {
             guardarRecetaDePlatillo($idPlatillo, $limpia, esIa: true);
             registroLog('ia', 'Platillo creado desde recomendación de despensa: ' . $idPlatillo);
             respuestaJson(['ok' => true, 'id_platillo' => $idPlatillo, 'message' => 'Platillo creado con IA para ' . $porciones . ' porciones.']);
+
+        // ---- IA: transcribir dictado del micrófono (audio -> texto) ----
+        case 'ia_transcribir':
+            if (!iaActiva()) {
+                respuestaJson(['error' => 'IA desactivada: configura OPENAI_API_KEY en .env.'], 503);
+            }
+            $audio = $_FILES['audio'] ?? null;
+            if ($audio === null || ($audio['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($audio['tmp_name'])) {
+                respuestaJson(['error' => 'No llegó el audio del dictado.'], 422);
+            }
+            if ((int) $audio['size'] > 15 * 1024 * 1024) {
+                respuestaJson(['error' => 'El audio es demasiado largo. Dicta en fragmentos más cortos.'], 422);
+            }
+            // Extensión según el formato real que produce MediaRecorder en cada navegador.
+            $mime = strtolower(trim(explode(';', (string) $audio['type'])[0]));
+            $extensiones = [
+                'audio/webm' => 'webm', 'video/webm' => 'webm',
+                'audio/mp4' => 'mp4', 'video/mp4' => 'mp4', 'audio/m4a' => 'm4a', 'audio/x-m4a' => 'm4a',
+                'audio/ogg' => 'ogg', 'application/ogg' => 'ogg',
+                'audio/mpeg' => 'mp3', 'audio/wav' => 'wav', 'audio/x-wav' => 'wav',
+            ];
+            if (!isset($extensiones[$mime])) {
+                respuestaJson(['error' => 'Formato de audio no soportado.'], 422);
+            }
+            $texto = transcribirAudioIA($audio['tmp_name'], 'dictado.' . $extensiones[$mime], $mime);
+            respuestaJson(['ok' => true, 'texto' => mb_substr($texto, 0, 400)]);
+
+        // ---- IA: antojo libre ("dame la receta de birria", "algo cremoso con camarones") ----
+        case 'ia_antojo':
+            if (!iaActiva()) {
+                respuestaJson(['error' => 'IA desactivada: configura OPENAI_API_KEY en .env.'], 503);
+            }
+            $antojo = trim((string) ($peticion['antojo'] ?? ''));
+            if (mb_strlen($antojo) < 3 || mb_strlen($antojo) > 400) {
+                respuestaJson(['error' => 'Cuéntame qué se te antoja en 3–400 caracteres.'], 422);
+            }
+
+            $datos = pedirAntojoIA($antojo, nombresDespensa(), preferenciasFamilia(), contarMiembrosFamilia());
+
+            // Petición abierta: la IA recomienda platillos (mismas tarjetas que la despensa).
+            if ($datos['tipo'] === 'recomendaciones') {
+                respuestaJson(['ok' => true, 'tipo' => 'recomendaciones', 'recomendaciones' => $datos['recomendaciones']]);
+            }
+
+            // Platillo concreto: se valida la receta y se crea el platillo completo.
+            $errores = [];
+            $recetaLimpia = validarReceta($datos['receta'], $errores);
+            if ($recetaLimpia === null) {
+                descartarCacheIA(); // que el reintento vuelva a consultar al modelo
+                respuestaJson(['error' => 'La receta de la IA no pasó la validación y no se guardó. Intenta de nuevo.', 'details' => $errores], 422);
+            }
+            $sugerido = $datos['platillo'];
+            $idPlatillo = crearPlatillo([
+                'nombre' => mb_substr(trim((string) ($sugerido['nombre'] ?? $antojo)), 0, 160),
+                'descripcion' => mb_substr(trim((string) ($sugerido['descripcion'] ?? '')), 0, 2000),
+                'tono' => in_array($sugerido['tono'] ?? '', TONOS_PLATILLO, true) ? $sugerido['tono'] : 'salado',
+                'tipo_comida' => in_array($sugerido['tipo_comida'] ?? '', TIPOS_COMIDA, true) ? $sugerido['tipo_comida'] : 'comida',
+                'cocina' => mb_substr(trim((string) ($sugerido['cocina'] ?? '')), 0, 80),
+                'dificultad' => min(5, max(1, (int) ($sugerido['dificultad'] ?? 2))),
+                'tiempo_preparacion' => $recetaLimpia['tiempo_preparacion'],
+                'porciones' => $recetaLimpia['porciones'] ?? contarMiembrosFamilia(),
+                'imagen_url' => '',
+                'generado_ia' => 1,
+            ]);
+            guardarRecetaDePlatillo($idPlatillo, $recetaLimpia, esIa: true);
+            registroLog('ia', 'Platillo creado desde antojo libre: ' . $idPlatillo);
+            respuestaJson([
+                'ok' => true,
+                'tipo' => 'receta',
+                'id_platillo' => $idPlatillo,
+                'message' => 'La IA preparó "' . ($sugerido['nombre'] ?? $antojo) . '" con su receta. Revísala antes de cocinar.',
+            ]);
 
         default:
             respuestaJson(['error' => 'Acción desconocida.'], 400);

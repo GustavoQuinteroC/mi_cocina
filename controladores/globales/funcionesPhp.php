@@ -119,7 +119,9 @@ function cabecerasSeguridad(): void
     header('X-Frame-Options: DENY');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+    // microphone=(self): el dictado por micrófono (antojo con IA) lo necesita
+    // en nuestro propio origen; geolocalización y cámara siguen bloqueadas.
+    header('Permissions-Policy: geolocation=(), microphone=(self), camera=()');
 }
 
 cabecerasSeguridad();

@@ -195,8 +195,18 @@ function validarIngredientesReceta(mixed $ingredientes, array &$errores, bool $o
             continue;
         }
 
-        // Cantidad: numérica positiva y dentro de un rango sensato.
+        // Cantidad textual tipo "al gusto" (vicio común de la IA): se normaliza
+        // a 1 + unidad "al gusto" en vez de rechazar la receta completa.
         $cantidad = $ingrediente['cantidad'] ?? null;
+        if (is_string($cantidad) && preg_match('/^\s*(al?\s+gusto|c\/?n|cantidad\s+(que\s+sea\s+)?necesaria|opcional)\s*$/iu', $cantidad)) {
+            $unidadCruda = $ingrediente['unidad'] ?? null;
+            if (!is_string($unidadCruda) || trim($unidadCruda) === '') {
+                $ingrediente['unidad'] = 'al gusto';
+            }
+            $cantidad = 1;
+        }
+
+        // Cantidad: numérica positiva y dentro de un rango sensato.
         if (!is_numeric($cantidad)) {
             $errores[] = "Ingrediente '$nombre': cantidad no numérica.";
             continue;

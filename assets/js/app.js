@@ -38,6 +38,29 @@ async function peticionAjax(accion, datos = {}) {
     return json;
 }
 
+/**
+ * POST multipart (FormData) al endpoint AJAX; lo usa el dictado por micrófono
+ * para subir el audio. El navegador pone solo el Content-Type con su boundary.
+ */
+async function peticionAjaxArchivo(formData) {
+    const respuesta = await fetch(URL_AJAX, {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'X-CSRF-Token': tokenCsrf(),
+            'X-Requested-With': 'fetch',
+        },
+        body: formData,
+    });
+    if (respuesta.status === 401) {
+        window.location.href = '/index.php';
+        throw new Error('Tu sesión expiró. Vuelve a entrar.');
+    }
+    const json = await respuesta.json().catch(() => ({}));
+    if (!respuesta.ok) throw new Error(json.error || 'Error inesperado.');
+    return json;
+}
+
 /** Aviso flotante (mismo estilo que los flashes del servidor). */
 function avisar(mensaje, tipo = 'success') {
     const caja = document.getElementById('avisos');
@@ -425,19 +448,38 @@ document.addEventListener('alpine:init', () => {
     }));
 
     /**
-     * Recomendador por despensa (reutilizable). Lo usa el inicio con el botón
-     * "Cocinar con lo que tengo": pide a la IA platillos con lo que hay en casa
-     * y los muestra igual que en la sección Despensa.
+     * Recomendador por despensa + antojo libre (inicio). Botón "Cocinar con lo
+     * que tengo" (recomienda con la despensa, como en la sección Despensa) y
+     * cuadro "¿Qué se te antoja?": la IA responde con una receta directa
+     * (redirige al platillo creado) o con recomendaciones (mismas tarjetas).
      */
     Alpine.data('recomendadorDespensa', (iaActiva) => ({
         iaActiva,
         recomendaciones: [],
         cargandoReco: false,
+        tituloReco: '',
+        recoConDespensa: false, // solo con la despensa tiene sentido "✓ Tienes todo"
+        antojo: '',
+        cargandoAntojo: false,
+
+        // --- Dictado por micrófono (transcrito con la IA) ---
+        soportaMic: !!(navigator.mediaDevices && window.MediaRecorder),
+        grabando: false,
+        transcribiendo: false, // transcripción final en curso
+        segundosDictado: 0,
+        _grabadora: null,
+        _trozos: [],
+        _mimeDictado: '',
+        _prefijoDictado: '', // lo que ya estaba escrito antes de dictar
+        _intervaloDictado: null,
+        _parcialEnVuelo: false,
 
         async recomendar() {
             if (!this.iaActiva) return avisar('Las funciones de IA no están configuradas (OPENAI_API_KEY).', 'error');
             this.cargandoReco = true;
             this.recomendaciones = [];
+            this.tituloReco = 'Con lo que tienes en casa puedes hacer:';
+            this.recoConDespensa = true;
             try {
                 const json = await peticionAjax('ia_despensa');
                 this.recomendaciones = (json.recomendaciones || []).map(r => ({ ...r, _creando: false }));
@@ -446,6 +488,112 @@ document.addEventListener('alpine:init', () => {
                 avisar(error.message, 'error');
             } finally {
                 this.cargandoReco = false;
+            }
+        },
+
+        async pedirAntojo() {
+            if (!this.iaActiva) return avisar('Las funciones de IA no están configuradas (OPENAI_API_KEY).', 'error');
+            const antojo = this.antojo.trim();
+            if (antojo.length < 3) return avisar('Cuéntame qué se te antoja (mínimo 3 letras).', 'error');
+            this.cargandoAntojo = true;
+            let redirigiendo = false;
+            try {
+                const json = await peticionAjax('ia_antojo', { antojo });
+                if (json.tipo === 'receta') {
+                    redirigiendo = true; // el botón se queda en "Buscando…" hasta la redirección
+                    avisar(json.message);
+                    setTimeout(() => { window.location.href = '/vistas/platillos/ver.php?id=' + json.id_platillo; }, 900);
+                    return;
+                }
+                this.tituloReco = 'Para tu antojo, la IA te recomienda:';
+                this.recoConDespensa = false;
+                this.recomendaciones = (json.recomendaciones || []).map(r => ({ ...r, _creando: false }));
+                if (this.recomendaciones.length === 0) avisar('La IA no encontró nada para ese antojo. Intenta describirlo de otra forma.');
+            } catch (error) {
+                avisar(error.message, 'error');
+            } finally {
+                if (!redirigiendo) this.cargandoAntojo = false;
+            }
+        },
+
+        /** Botón 🎤: inicia el dictado o lo detiene (y transcribe lo final). */
+        async alternarDictado() {
+            if (!this.iaActiva) return avisar('Las funciones de IA no están configuradas (OPENAI_API_KEY).', 'error');
+            if (this.grabando) { this._grabadora?.stop(); return; }
+
+            if (!window.isSecureContext) {
+                return avisar('El micrófono solo funciona con HTTPS. Abre la app desde su dirección segura.', 'error');
+            }
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (error) {
+                console.error('Dictado: getUserMedia falló:', error.name, error.message);
+                const mensajes = {
+                    NotAllowedError: 'El micrófono está bloqueado para este sitio. Tócale al candado de la barra de direcciones y permite el micrófono.',
+                    NotFoundError: 'No se encontró ningún micrófono en este dispositivo.',
+                    NotReadableError: 'Otra aplicación está usando el micrófono. Ciérrala e intenta de nuevo.',
+                    SecurityError: 'El navegador bloqueó el micrófono por seguridad (¿estás en HTTPS?).',
+                };
+                return avisar(mensajes[error.name] || 'No se pudo usar el micrófono: ' + error.message, 'error');
+            }
+
+            const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+                .find(m => MediaRecorder.isTypeSupported(m)) || '';
+            const grabadora = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+
+            this._grabadora = grabadora;
+            this._trozos = [];
+            this._mimeDictado = grabadora.mimeType || mime || 'audio/webm';
+            this._prefijoDictado = this.antojo.trim() ? this.antojo.trim() + ' ' : '';
+            this.segundosDictado = 0;
+            this.grabando = true;
+
+            grabadora.ondataavailable = e => { if (e.data && e.data.size) this._trozos.push(e.data); };
+            grabadora.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                clearInterval(this._intervaloDictado);
+                this.grabando = false;
+                this._transcribir(true);
+            };
+            // Trozos de 1 s: el blob acumulado desde el inicio siempre es un archivo válido.
+            grabadora.start(1000);
+
+            // Contador cada segundo; cada 5 s una transcripción parcial para que el
+            // texto vaya apareciendo mientras se habla. Tope de 60 s por dictado.
+            this._intervaloDictado = setInterval(() => {
+                this.segundosDictado++;
+                if (this.segundosDictado >= 60) { grabadora.stop(); return; }
+                if (this.segundosDictado % 5 === 0) this._transcribir(false);
+            }, 1000);
+        },
+
+        /** Manda el audio acumulado a la IA. Las parciales fallan en silencio. */
+        async _transcribir(esFinal) {
+            if (this._trozos.length === 0) {
+                if (esFinal) avisar('No se alcanzó a grabar audio. Intenta de nuevo.', 'error');
+                return;
+            }
+            if (!esFinal && this._parcialEnVuelo) return; // no encimar parciales
+            this._parcialEnVuelo = !esFinal;
+            if (esFinal) this.transcribiendo = true;
+
+            const extension = this._mimeDictado.includes('mp4') ? 'mp4'
+                : this._mimeDictado.includes('ogg') ? 'ogg' : 'webm';
+            const datos = new FormData();
+            datos.append('accion', 'ia_transcribir');
+            datos.append('audio', new Blob(this._trozos, { type: this._mimeDictado }), 'dictado.' + extension);
+
+            try {
+                const json = await peticionAjaxArchivo(datos);
+                // Una parcial que llega después de detener ya no debe pisar el texto final.
+                if (!esFinal && !this.grabando) return;
+                this.antojo = (this._prefijoDictado + json.texto).slice(0, 400); // tope del backend
+            } catch (error) {
+                if (esFinal) avisar(error.message, 'error');
+            } finally {
+                this._parcialEnVuelo = false;
+                if (esFinal) this.transcribiendo = false;
             }
         },
 
