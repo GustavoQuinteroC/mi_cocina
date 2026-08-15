@@ -82,7 +82,15 @@ $database = new Medoo\Medoo([
 // Sesión segura
 // ---------------------------------------------------------------------------
 
-/** Inicia la sesión con cookie httponly + samesite (secure en producción). */
+/**
+ * Inicia la sesión con cookie httponly + samesite (secure en producción).
+ *
+ * La sesión es PERSISTENTE (SESION_DIAS en .env, 730 por defecto): la cookie
+ * sobrevive al cierre del navegador/PWA y el servidor conserva la sesión ese
+ * mismo tiempo (carpeta propia en storage/sesiones, para que el gc_maxlifetime
+ * configurado aplique de verdad y ningún otro proceso la limpie antes).
+ * Con la renovación deslizante, quien usa la app seguido no vuelve a loguearse.
+ */
 function iniciarSesionSegura(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -92,15 +100,44 @@ function iniciarSesionSegura(): void
     $segura = leerEnv('APP_ENV', 'prod') === 'prod'
         || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
 
+    $dias = max(1, min(1095, (int) (leerEnv('SESION_DIAS', '730') ?: 730)));
+    $vida = $dias * 86400;
+
+    $rutaSesiones = dirname(__DIR__, 2) . '/storage/sesiones';
+    if (!is_dir($rutaSesiones)) {
+        @mkdir($rutaSesiones, 0775, true);
+    }
+    if (is_dir($rutaSesiones) && is_writable($rutaSesiones)) {
+        ini_set('session.save_path', $rutaSesiones);
+        // En Debian el gc de sesiones viene desactivado (lo hace un cron que NO
+        // conoce nuestra carpeta): se reactiva para que las viejas sí se borren.
+        ini_set('session.gc_probability', '1');
+        ini_set('session.gc_divisor', '100');
+    }
+    ini_set('session.gc_maxlifetime', (string) $vida);
+
     session_name('micocina_sid');
     session_set_cookie_params([
-        'lifetime' => 0,
+        'lifetime' => $vida,
         'path' => '/',
         'httponly' => true,
         'secure' => $segura,
         'samesite' => 'Lax',
     ]);
     session_start();
+
+    // Renovación deslizante: se reemite la cookie a lo mucho una vez al día,
+    // así la expiración siempre queda a SESION_DIAS del último uso.
+    if (($_SESSION['_cookie_renovada'] ?? 0) < time() - 86400) {
+        $_SESSION['_cookie_renovada'] = time();
+        setcookie(session_name(), session_id(), [
+            'expires' => time() + $vida,
+            'path' => '/',
+            'httponly' => true,
+            'secure' => $segura,
+            'samesite' => 'Lax',
+        ]);
+    }
 }
 
 iniciarSesionSegura();
