@@ -3,6 +3,21 @@
 /* Alpine: oculta elementos hasta que el framework tome control */
 [x-cloak] { display: none !important; }
 
+/* ------------------------------------------------------------------
+   Responsive: nada debe desbordar horizontalmente.
+   clip (y no hidden) para no convertir el body en contenedor de scroll,
+   lo que rompería los elementos sticky (barra de navegación, buscador).
+------------------------------------------------------------------- */
+html, body { overflow-x: clip; }
+
+/* En pantallas táctiles, iOS/Android hacen ZOOM automático al enfocar
+   campos con fuente menor a 16px y la página se queda ampliada (el
+   usuario tiene que alejar el zoom a mano). Se fuerza 16px en los
+   campos de formulario solo en dispositivos táctiles. */
+@media (pointer: coarse) {
+    input, select, textarea { font-size: 16px !important; }
+}
+
 /* Animación de los avisos (toasts) */
 @keyframes entrada-aviso {
     from { opacity: 0; transform: translateX(1rem); }

@@ -55,7 +55,7 @@ mensajesFlash();
             <input id="antojo-ia" type="text" x-model="antojo" maxlength="400" :disabled="cargandoAntojo"
                    :class="grabando ? 'ring-2 ring-red-400 border-red-300' : ''"
                    :placeholder="grabando ? '🔴 Escuchando… habla y el texto irá apareciendo' : 'Pídeme lo que sea: &quot;dame la receta de birria&quot; o &quot;se me antojan camarones cremosos&quot;…'"
-                   class="flex-1 px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-crema-200 dark:border-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-barro-400 disabled:opacity-60 placeholder:text-stone-400 transition-shadow">
+                   class="flex-1 min-w-0 px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-crema-200 dark:border-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-barro-400 disabled:opacity-60 placeholder:text-stone-400 transition-shadow">
 
             <!-- Dictado por micrófono (transcrito con IA) -->
             <button type="button" x-show="soportaMic" @click="alternarDictado()" :disabled="transcribiendo || cargandoAntojo"

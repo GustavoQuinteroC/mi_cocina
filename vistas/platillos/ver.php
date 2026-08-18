@@ -162,7 +162,8 @@ include __DIR__ . '/_datalist_ingredientes.php';
                             </li>
                         </template>
                     </ul>
-                    <p class="text-xs text-stone-400 mt-3" x-show="receta.url_fuente">
+                    <!-- break-all: una URL larga sin quiebres desborda la tarjeta en móvil -->
+                    <p class="text-xs text-stone-400 mt-3 break-all" x-show="receta.url_fuente">
                         Fuente: <a :href="receta.url_fuente" target="_blank" rel="noopener noreferrer" class="underline hover:text-barro-600" x-text="receta.url_fuente"></a>
                     </p>
                 </div>
@@ -213,7 +214,7 @@ include __DIR__ . '/_datalist_ingredientes.php';
                         </div>
                         <div class="flex gap-2">
                             <input x-model="instruccionAjuste" maxlength="300" placeholder="Ej. hazla vegetariana y para 6 personas"
-                                   class="flex-1 px-4 py-2.5 rounded-2xl border border-violet-300/40 bg-white dark:bg-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                                   class="flex-1 min-w-0 px-4 py-2.5 rounded-2xl border border-violet-300/40 bg-white dark:bg-stone-800 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
                             <button @click="ajustarConIA()" :disabled="iaOcupada"
                                     class="px-4 py-2.5 rounded-2xl bg-violet-600 text-white font-bold text-sm hover:bg-violet-700 disabled:opacity-50 transition-all">
                                 <span x-show="!iaOcupada">Ajustar</span><span x-show="iaOcupada" x-cloak>Pensando…</span>
@@ -268,11 +269,12 @@ include __DIR__ . '/_datalist_ingredientes.php';
         <h3 class="font-bold text-sm mb-2">Ingredientes</h3>
         <div class="space-y-2 mb-2">
             <template x-for="(ing, i) in borrador.ingredientes" :key="i">
-                <div class="flex gap-2">
-                    <input x-model="ing.cantidad" type="number" step="0.01" min="0.01" placeholder="Cant." class="w-20 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
-                    <input x-model="ing.unidad" placeholder="unidad" maxlength="40" class="w-24 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
-                    <input x-model="ing.nombre" list="lista-ingredientes" @input="autoUnidad(i)" placeholder="Ingrediente" maxlength="160" class="flex-1 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
-                    <button @click="borrador.ingredientes.splice(i, 1)" class="px-2 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
+                <!-- min-w-0 en el nombre: sin él, el input no encoge en flex y la fila desborda en teléfonos -->
+                <div class="flex gap-1.5 sm:gap-2">
+                    <input x-model="ing.cantidad" type="number" step="0.01" min="0.01" placeholder="Cant." class="w-14 sm:w-20 shrink-0 px-2 sm:px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
+                    <input x-model="ing.unidad" placeholder="unidad" maxlength="40" class="w-16 sm:w-24 shrink-0 px-2 sm:px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
+                    <input x-model="ing.nombre" list="lista-ingredientes" @input="autoUnidad(i)" placeholder="Ingrediente" maxlength="160" class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
+                    <button @click="borrador.ingredientes.splice(i, 1)" class="px-1.5 sm:px-2 shrink-0 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
                 </div>
             </template>
         </div>
@@ -283,10 +285,10 @@ include __DIR__ . '/_datalist_ingredientes.php';
         <div class="space-y-2 mb-2">
             <template x-for="(paso, i) in borrador.pasos" :key="i">
                 <div class="flex gap-2 items-start">
-                    <span class="w-7 h-9 grid place-items-center font-bold text-sm text-stone-400" x-text="i + 1 + '.'"></span>
+                    <span class="w-7 h-9 shrink-0 grid place-items-center font-bold text-sm text-stone-400" x-text="i + 1 + '.'"></span>
                     <textarea x-model="borrador.pasos[i]" rows="2" maxlength="600" placeholder="Describe el paso…"
-                              class="flex-1 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm"></textarea>
-                    <button @click="borrador.pasos.splice(i, 1)" class="px-2 pt-2 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
+                              class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm"></textarea>
+                    <button @click="borrador.pasos.splice(i, 1)" class="px-2 pt-2 shrink-0 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
                 </div>
             </template>
         </div>

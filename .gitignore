@@ -9,6 +9,7 @@ CLAUDE.md
 /storage/cache/ia/*.json
 /storage/cache/rate/*.json
 /storage/logs/*.log
+/storage/sesiones/sess_*
 
 # Sistema
 .DS_Store

@@ -134,7 +134,7 @@ mensajesFlash();
         </p>
 
         <div class="flex items-center gap-2" x-data="{ copiado: false }">
-            <code class="flex-1 text-center text-2xl font-mono font-bold tracking-[.3em] px-4 py-3 rounded-2xl bg-crema-100 dark:bg-stone-800 text-barro-700 dark:text-barro-400 select-all">
+            <code class="flex-1 min-w-0 text-center text-lg sm:text-2xl font-mono font-bold tracking-[.15em] sm:tracking-[.3em] px-2 sm:px-4 py-3 rounded-2xl bg-crema-100 dark:bg-stone-800 text-barro-700 dark:text-barro-400 select-all">
                 <?= e($familia['codigo_invitacion'] ?? '') ?>
             </code>
             <button @click="navigator.clipboard.writeText('<?= e($familia['codigo_invitacion'] ?? '') ?>'); copiado = true; setTimeout(() => copiado = false, 1500)"

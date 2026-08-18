@@ -201,14 +201,15 @@ include __DIR__ . '/_datalist_ingredientes.php';
 
         <div class="space-y-2">
             <template x-for="(ing, i) in ingredientes" :key="i">
-                <div class="flex gap-2">
+                <!-- min-w-0 en el nombre: sin él, el input no encoge en flex y la fila desborda en teléfonos -->
+                <div class="flex gap-1.5 sm:gap-2">
                     <input x-model="ing.cantidad" name="ingrediente_cantidad[]" type="number" step="0.01" min="0.01" placeholder="Cant."
-                           class="w-20 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
+                           class="w-14 sm:w-20 shrink-0 px-2 sm:px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
                     <input x-model="ing.unidad" name="ingrediente_unidad[]" placeholder="unidad" maxlength="40"
-                           class="w-24 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
+                           class="w-16 sm:w-24 shrink-0 px-2 sm:px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
                     <input x-model="ing.nombre" name="ingrediente_nombre[]" list="lista-ingredientes" @input="autoUnidad(i)" placeholder="Ingrediente" maxlength="160"
-                           class="flex-1 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
-                    <button type="button" @click="quitarIngrediente(i)" class="px-2 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
+                           class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm">
+                    <button type="button" @click="quitarIngrediente(i)" class="px-1.5 sm:px-2 shrink-0 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
                 </div>
             </template>
         </div>
@@ -222,10 +223,10 @@ include __DIR__ . '/_datalist_ingredientes.php';
         <div class="space-y-2">
             <template x-for="(paso, i) in pasos" :key="i">
                 <div class="flex gap-2 items-start">
-                    <span class="w-7 h-9 grid place-items-center font-bold text-sm text-stone-400" x-text="(i + 1) + '.'"></span>
+                    <span class="w-7 h-9 shrink-0 grid place-items-center font-bold text-sm text-stone-400" x-text="(i + 1) + '.'"></span>
                     <textarea x-model="pasos[i]" name="paso[]" rows="2" maxlength="600" placeholder="Describe el paso…"
-                              class="flex-1 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm"></textarea>
-                    <button type="button" @click="quitarPaso(i)" class="px-2 pt-2 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
+                              class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-crema-200 dark:border-stone-700 bg-crema-50 dark:bg-stone-800 text-sm"></textarea>
+                    <button type="button" @click="quitarPaso(i)" class="px-2 pt-2 shrink-0 text-red-500 hover:scale-110 transition-transform" aria-label="Quitar">✕</button>
                 </div>
             </template>
         </div>

@@ -74,14 +74,14 @@ mensajesFlash();
     <!-- Buscador global -->
     <div class="sticky top-16 z-30 bg-crema-50 dark:bg-stone-950 py-2 mb-2">
         <div class="flex items-center gap-2">
-            <div class="relative flex-1">
+            <div class="relative flex-1 min-w-0">
                 <span class="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">🔍</span>
                 <input x-model="busqueda" type="search" placeholder="Buscar ingrediente… (jitomate, chile, queso…)"
                        class="w-full pl-11 pr-4 py-3 rounded-2xl border border-crema-200 dark:border-stone-700 bg-white dark:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-barro-400">
             </div>
             <button x-show="items.some(i => i.hace_falta)" x-cloak @click="aCompras()"
                     class="shrink-0 px-4 py-3 rounded-2xl bg-oliva-600 text-white font-bold text-sm hover:bg-oliva-500 transition-colors">
-                🛒 Faltantes a compras
+                🛒 <span class="hidden sm:inline">Faltantes a compras</span><span class="sm:hidden">A compras</span>
             </button>
         </div>
     </div>
@@ -113,12 +113,12 @@ mensajesFlash();
                     <span class="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-crema-100 dark:bg-stone-800 text-stone-500" x-text="item.categoria"></span>
                 </div>
                 <button @click="fijar(item, 'tengo')" title="Lo tengo en casa"
-                        class="w-24 py-1.5 rounded-xl text-xs font-bold transition-colors"
+                        class="w-[4.25rem] sm:w-24 shrink-0 py-1.5 rounded-xl text-xs font-bold transition-colors"
                         :class="item.tengo ? 'bg-oliva-500 text-white' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-oliva-600'">
                     <span x-text="item.tengo ? '✓ Tengo' : 'Tengo'"></span>
                 </button>
                 <button @click="fijar(item, 'hace_falta')" title="Hace falta / se está acabando"
-                        class="w-24 py-1.5 rounded-xl text-xs font-bold transition-colors"
+                        class="w-[4.25rem] sm:w-24 shrink-0 py-1.5 rounded-xl text-xs font-bold transition-colors"
                         :class="item.hace_falta ? 'bg-amber-500 text-white' : 'bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-amber-600'">
                     <span x-text="item.hace_falta ? '⚠ Falta' : 'Falta'"></span>
                 </button>
