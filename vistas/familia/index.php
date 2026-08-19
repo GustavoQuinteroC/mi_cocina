@@ -134,7 +134,8 @@ mensajesFlash();
         </p>
 
         <div class="flex items-center gap-2" x-data="{ copiado: false }">
-            <code class="flex-1 min-w-0 text-center text-lg sm:text-2xl font-mono font-bold tracking-[.15em] sm:tracking-[.3em] px-2 sm:px-4 py-3 rounded-2xl bg-crema-100 dark:bg-stone-800 text-barro-700 dark:text-barro-400 select-all">
+            <!-- overflow-x-auto: si el código no cupiera, se desplaza dentro de su caja sin romper la tarjeta -->
+            <code class="flex-1 min-w-0 overflow-x-auto whitespace-nowrap text-center text-lg sm:text-2xl font-mono font-bold tracking-[.15em] sm:tracking-[.3em] px-2 sm:px-4 py-3 rounded-2xl bg-crema-100 dark:bg-stone-800 text-barro-700 dark:text-barro-400 select-all">
                 <?= e($familia['codigo_invitacion'] ?? '') ?>
             </code>
             <button @click="navigator.clipboard.writeText('<?= e($familia['codigo_invitacion'] ?? '') ?>'); copiado = true; setTimeout(() => copiado = false, 1500)"
@@ -158,44 +159,46 @@ mensajesFlash();
         <h2 class="font-display font-bold text-xl mb-4">Miembros (<?= count($miembros) ?>)</h2>
         <ul class="space-y-3">
             <?php foreach ($miembros as $miembro): ?>
-            <li class="flex items-center gap-3">
-                <span class="w-10 h-10 rounded-full bg-gradient-to-br from-barro-400 to-barro-600 text-white grid place-items-center font-bold">
+            <!-- flex-wrap + basis: en teléfonos el nombre conserva su espacio y
+                 el rol/acciones bajan a un segundo renglón en vez de aplastarlo -->
+            <li class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span class="w-10 h-10 shrink-0 rounded-full bg-gradient-to-br from-barro-400 to-barro-600 text-white grid place-items-center font-bold">
                     <?= e(mb_strtoupper(mb_substr($miembro['nombre'], 0, 1))) ?>
                 </span>
-                <div class="flex-1 min-w-0">
+                <div class="grow min-w-0 basis-36">
                     <p class="font-bold truncate">
                         <?= e($miembro['nombre']) ?>
                         <?php if ((int) $miembro['id'] === idUsuarioActual()): ?><span class="text-xs text-stone-400 font-semibold">(tú)</span><?php endif; ?>
                     </p>
                     <p class="text-xs text-stone-400 truncate"><?= e($miembro['correo']) ?></p>
                 </div>
-                <span class="text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide <?= $miembro['rol'] === 'admin'
-                    ? 'bg-barro-500/10 text-barro-600 dark:text-barro-400'
-                    : 'bg-stone-100 dark:bg-stone-800 text-stone-500' ?>">
-                    <?= e($miembro['rol'] === 'admin' ? 'Admin' : 'Miembro') ?>
-                </span>
-                <?php if (usuarioEsAdmin() && $miembro['rol'] === 'miembro' && (int) $miembro['id'] !== idUsuarioActual()): ?>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 ml-auto">
+                    <span class="text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wide <?= $miembro['rol'] === 'admin'
+                        ? 'bg-barro-500/10 text-barro-600 dark:text-barro-400'
+                        : 'bg-stone-100 dark:bg-stone-800 text-stone-500' ?>">
+                        <?= e($miembro['rol'] === 'admin' ? 'Admin' : 'Miembro') ?>
+                    </span>
+                    <?php if (usuarioEsAdmin() && $miembro['rol'] === 'miembro' && (int) $miembro['id'] !== idUsuarioActual()): ?>
                     <form method="post" onsubmit="return confirm('¿Generar una contraseña temporal para <?= e($miembro['nombre']) ?>? La actual dejará de funcionar.')">
                         <input type="hidden" name="accion" value="restablecer_password">
                         <input type="hidden" name="id_usuario" value="<?= (int) $miembro['id'] ?>">
                         <input type="hidden" name="_csrf" value="<?= e(tokenCsrf()) ?>">
-                        <button class="text-stone-400 hover:text-barro-600 transition-colors" title="Restablecer contraseña">🔑</button>
+                        <button class="w-8 h-8 grid place-items-center rounded-lg text-stone-400 hover:text-barro-600 hover:bg-barro-500/10 transition-colors" title="Restablecer contraseña">🔑</button>
                     </form>
                     <form method="post" onsubmit="return confirm('¿Transferir la administración a <?= e($miembro['nombre']) ?>? Tú pasarás a ser miembro.')">
                         <input type="hidden" name="accion" value="transferir_admin">
                         <input type="hidden" name="id_usuario" value="<?= (int) $miembro['id'] ?>">
                         <input type="hidden" name="_csrf" value="<?= e(tokenCsrf()) ?>">
-                        <button class="text-stone-400 hover:text-barro-600 transition-colors" title="Hacer administrador">👑</button>
+                        <button class="w-8 h-8 grid place-items-center rounded-lg text-stone-400 hover:text-barro-600 hover:bg-barro-500/10 transition-colors" title="Hacer administrador">👑</button>
                     </form>
                     <form method="post" onsubmit="return confirm('¿Expulsar a <?= e($miembro['nombre']) ?> de la familia?')">
                         <input type="hidden" name="accion" value="expulsar">
                         <input type="hidden" name="id_usuario" value="<?= (int) $miembro['id'] ?>">
                         <input type="hidden" name="_csrf" value="<?= e(tokenCsrf()) ?>">
-                        <button class="text-red-500 hover:scale-110 transition-transform" title="Expulsar">✕</button>
+                        <button class="w-8 h-8 grid place-items-center rounded-lg text-red-500 hover:bg-red-500/10 transition-colors" title="Expulsar">✕</button>
                     </form>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
             </li>
             <?php endforeach; ?>
         </ul>

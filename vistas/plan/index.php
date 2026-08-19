@@ -60,7 +60,7 @@ mensajesFlash();
 </div>
 <?php else: ?>
 
-<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-7" x-data="planSemanal()">
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7" x-data="planSemanal()">
     <?php foreach ($dias as $i => $fecha): $esHoy = $fecha === $hoy; ?>
     <section class="rounded-3xl border p-3 <?= $esHoy
         ? 'bg-barro-500/5 border-barro-400/50 ring-2 ring-barro-400/30'
