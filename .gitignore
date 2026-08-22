@@ -18,3 +18,69 @@ AGENTS.md
 .env.*
 !.env.example
 *.log
+
+# ============================================================
+#  Nunca al repo (2026-10-28)
+# ============================================================
+
+# ----- Base de datos: ningún .sql, esquema, respaldo ni versión -----
+*.sql
+*.sql.*
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+/sql/
+
+# ----- Notas y SQL de versión: viven solo en el servidor -----
+/actualizaciones/
+
+# ----- Alta y cobro de suscripciones -----
+/api/contratacion/
+
+# ----- Logs: ignorar contenido, conservar la carpeta y su bloqueo web -----
+*.log
+error_log
+php_errors.log
+/logs/*
+!/logs/.gitkeep
+!/logs/.htaccess
+
+# ----- Herramientas de desarrollo, pruebas y bandera de instalación -----
+/herramientas/
+/pruebas/
+/.installed
+
+# ----- Planes, ideas, reportes y documentación interna -----
+/docs/
+/planes/
+PLAN_*
+PRUEBAS_*
+IDEAS_*
+REPORTE_*
+PROBLEMATICA_*
+
+# ----- Instrucciones de asistentes IA -----
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+/.claude/
+
+# ----- Respaldos y comprimidos -----
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.age
+*.bundle
+
+# ----- Certificados y llaves -----
+/certificados/
+*.key
+*.pem
+*.cer
+*.p12
+*.pfx
+*.csr
