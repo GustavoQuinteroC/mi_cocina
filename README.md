@@ -23,8 +23,6 @@ mi_cocina/
 ├── .htaccess                  # Protege .env, vendor/, sql/, storage/ y controladores internos
 ├── .env / .env.example        # Configuración (secretos SOLO aquí)
 ├── assets/                    # css, js (Alpine), iconos
-├── sql/
-│   └── migrate.sql            # Migrate único: esquema completo VACÍO (resetea la base)
 ├── controladores/
 │   ├── ajax.php               # Endpoint AJAX central (JSON + CSRF)
 │   ├── globales/
@@ -65,11 +63,11 @@ cp .env.example .env
 # Edita .env: host/usuario/contraseña de tu MariaDB.
 # Agrega tu OPENAI_API_KEY si quieres las funciones de IA (opcional).
 
-# 3. Base de datos — estructura vacía, SIN registros.
-#    sql/migrate.sql crea la base `mi_cocina` completa desde cero
-#    (DROP DATABASE + CREATE DATABASE + tablas). Revisión y ejecución manual:
-mysql -u root -p < sql/migrate.sql
+# 3. Base de datos: crea la base `mi_cocina` en MariaDB con las tablas
+#    descritas en la sección "Base de datos".
 ```
+
+> El repositorio no incluye ningún archivo `.sql` (ni esquema ni datos): el `.gitignore` bloquea `*.sql`, `.env`, logs, caché y respaldos para que nada sensible llegue a GitHub.
 
 El document root es la **raíz del proyecto** (como en los demás proyectos). Al abrir la app aparece el login: el primer usuario se registra, crea su familia y queda como `admin`; los demás se unen con el código de invitación (sección Familia).
 
@@ -130,7 +128,7 @@ location ~ ^/controladores/(globales|individuales)/ { deny all; }
 ```
 
   **Verificación post-deploy obligatoria:** pedir en el navegador `/.env`,
-  `/sql/migrate.sql` y `/composer.lock` — deben responder **403/404**.
+  `/composer.lock` y `/storage/` — deben responder **403/404**.
 
 - `APP_ENV=prod` en `.env` (errores a `storage/logs/`, cookie `secure`).
 - `APP_TIMEZONE` en `.env` (por defecto `America/Mexico_City`): sin esto, "hoy/ayer"
