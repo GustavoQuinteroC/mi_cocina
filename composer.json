@@ -2,7 +2,7 @@
     "name": "familia/mi-cocina",
     "description": "Mi Cocina - organizador familiar de platillos, recetas y menú semanal con IA",
     "type": "project",
-    "license": "proprietary",
+    "license": "PolyForm-Noncommercial-1.0.0",
     "require": {
         "php": ">=8.2",
         "catfan/medoo": "^2.1",

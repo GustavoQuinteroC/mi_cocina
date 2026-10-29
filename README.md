@@ -153,3 +153,14 @@ location ~ ^/controladores/(globales|individuales)/ { deny all; }
 - `despensa` + `lista_compras`: ya con vista; calcula la lista del plan semanal restando la despensa.
 - `etiquetas`/`platillos_etiquetas` y `votos` ("qué se antoja" semanal): esquema listo, **sin UI todavía**.
 - Pendientes documentados: porciones ajustables en la interfaz, importar receta desde URL, turnos de cocina, estadísticas, colecciones de favoritos y notificaciones.
+
+## Licencia
+
+Mi Cocina se distribuye bajo la [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+- **Uso no comercial (permitido sin costo):** puedes usar, copiar, modificar y redistribuir el código para fines personales, de estudio, investigación o en organizaciones sin fines de lucro.
+- **Crédito obligatorio:** toda copia o redistribución, completa o parcial, debe incluir la licencia y este aviso de autor y origen:
+
+Required Notice: Copyright (c) 2026 Gustavo Quintero (https://github.com/GustavoQuinteroC/mi_cocina)
+
+- **Uso comercial:** requiere una licencia de pago. Escribe a [contacto@gustavoquintero.dev](mailto:contacto@gustavoquintero.dev).
