@@ -2,6 +2,8 @@
 
 Aplicación web para que una familia/casa organice **qué cocinar**: platillos con sus recetas, favoritos, historial de lo ya cocinado, plan de menú semanal y generación/ajuste de recetas con IA **sin alucinaciones** (grounding + validación estricta).
 
+**Pruébala en vivo:** [micocina.alkes.mx](https://micocina.alkes.mx)
+
 ## Stack
 
 - **PHP 8.2+ puro**, sin frameworks: funciones globales + controladores por módulo
